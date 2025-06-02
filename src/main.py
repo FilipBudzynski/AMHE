@@ -1,8 +1,10 @@
 import numpy as np
 from des import DES
 
+
 def sphere_function(x):
     return np.sum(x**2)
+
 
 if __name__ == "__main__":
     dim = 10
@@ -17,5 +19,5 @@ if __name__ == "__main__":
     )
     best_solution, best_value = des.run()
 
+    print(f"Objective value DES: {best_value}")
     print("Best solution found:", best_solution)
-    print("Objective value:", best_value)

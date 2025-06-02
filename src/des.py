@@ -11,8 +11,9 @@ class DES:
         population_size=None,
         mu=None,
         archive_horizon=None,
-        F=None,
-        c=None,
+        cc=None,
+        cd=None,
+        ce=None,
         epsilon=None,
     ):
         self.obj_func = objective_func
@@ -22,8 +23,13 @@ class DES:
 
         self.lambda_ = population_size or 4 * dim
         self.mu = mu or self.lambda_ // 2
-        self.F = F or 1.0 / np.sqrt(2)
-        self.c = c or (4.0 / (dim + 4))
+        self.cc = cc or (1.0 / np.sqrt(dim))
+        self.cd = cd or (1.0 / dim)
+        self.ce = ce or 0.01
+        # self.cc = cc or (1.0 / np.sqrt(dim))
+        # self.cd = cd or (self.mu / (self.mu + 2))
+        # self.ce = ce or (2.0 / dim**2)
+
         self.H = archive_horizon or int(6 + 3 * np.sqrt(dim))
         self.epsilon = epsilon or 1e-6 / np.sqrt(self.dim)
 
@@ -56,57 +62,108 @@ class DES:
         indices = np.argsort(fitness)
         return pop[indices[: self.mu]]
 
-    def update_midpoint_shift(self, delta, m, s):
-        return (1 - self.c) * delta + self.c * (s - m)
-
-    def generate_offspring(self, s, delta):
-        new_pop = []
-        for _ in range(self.lambda_):
-            h = np.random.randint(min(len(self.archive), self.H))
-            archive_pop = self.archive[-(h + 1)]
-
-            j, k = np.random.choice(self.mu, 2, replace=False)
-            diff = archive_pop[j] - archive_pop[k]
-
-            direction = (
-                np.random.normal()
-                * delta
-                * np.linalg.norm(np.random.normal(size=self.dim))
-            )
-            noise = self.epsilon * np.random.normal(size=self.dim)
-
-            x_new = s + self.F * diff + direction + noise
-            new_pop.append(x_new)
-        return np.array(new_pop)
-
     def run(self):
         eval_count = 0
+        t = 1
+
+        # Step 1–3
         pop = self.initialize_population()
-        delta = np.zeros(self.dim)
-        m = pop.mean(axis=0)
+        m_t = pop.mean(axis=0)
+        fitness = self.evaluate(pop)
+        eval_count += self.lambda_
+
+        self.archive.append(pop.copy())
+
+        delta_t = np.zeros(self.dim)
+        p_t = None
 
         best_solution = None
         best_value = float("inf")
 
         while eval_count < self.max_evals:
-            f_pop = self.evaluate(pop)
-            eval_count += len(f_pop)
+            # Step 6: mean of best mu individuals
+            mu_best = self.select_mu_best(pop, fitness)
+            m_tp1 = mu_best.mean(axis=0)
 
-            min_idx = np.argmin(f_pop)
-            if f_pop[min_idx] < best_value:
-                best_value = f_pop[min_idx]
-                best_solution = pop[min_idx]
+            # Step 7: delta
+            delta_tp1 = m_tp1 - m_t
 
-            s = self.select_mu_best(pop, f_pop).mean(axis=0)
-            delta = self.update_midpoint_shift(delta, m, s)
+            # Step 8–11: evolution path
+            if t == 1:
+                p_t = delta_tp1
+            else:
+                p_t = (1 - self.cc) * p_t + np.sqrt(
+                    self.mu * self.cc * (2 - self.cc)
+                ) * delta_tp1
 
+            # Step 13–21: generate new population
+            new_pop = []
+            for _ in range(self.lambda_):
+                # Step 14: random tau1, tau2, tau3 in {1, ..., H}
+                tau1 = np.random.randint(1, min(len(self.archive), self.H) + 1)
+                tau2 = np.random.randint(1, min(len(self.archive), self.H) + 1)
+                tau3 = np.random.randint(1, min(len(self.archive), self.H) + 1)
+
+                # Step 15: random j, k from {1, ..., mu}
+                j, k = np.random.choice(self.mu, 2, replace=False)
+
+                # Step 16–19: build direction vector d_i^(t)
+                x_archive_tau1 = self.select_mu_best(
+                    self.archive[-tau1], self.evaluate(self.archive[-tau1])
+                )
+                xj = x_archive_tau1[j]
+                xk = x_archive_tau1[k]
+                diff_term = np.sqrt(self.cd / 2) * (xj - xk)
+
+                # Δ^(t−tau2)
+                if len(self.archive) > tau2:
+                    m_prev = self.select_mu_best(
+                        self.archive[-tau2], self.evaluate(self.archive[-tau2])
+                    ).mean(axis=0)
+                    m_prev_prev = self.select_mu_best(
+                        self.archive[-tau2 - 1], self.evaluate(self.archive[-tau2 - 1])
+                    ).mean(axis=0)
+                    delta_past = m_prev - m_prev_prev
+                else:
+                    delta_past = np.zeros(self.dim)
+
+                delta_term = np.sqrt(self.cd) * delta_past * np.random.randn(self.dim)
+
+                # p^(t−tau3)
+                p_term = np.sqrt(1 - self.cd) * p_t * np.random.randn(self.dim)
+
+                # ε term
+                epsilon_term = (
+                    self.epsilon
+                    * ((1 - self.ce) ** (t / 2))
+                    * np.random.randn(self.dim)
+                )
+
+                d_i = diff_term + delta_term + p_term + epsilon_term
+
+                # Step 20
+                x_new = m_tp1 + d_i
+                new_pop.append(x_new)
+
+            pop = np.array(new_pop)
+            fitness = self.evaluate(pop)
+            eval_count += self.lambda_
+
+            m_t = m_tp1
+            delta_t = delta_tp1
             self.archive.append(pop.copy())
             if len(self.archive) > self.H:
                 self.archive.pop(0)
 
-            pop = self.generate_offspring(s, delta)
-            m = s
+            # Step 22: update best
+            min_idx = np.argmin(fitness)
+            if fitness[min_idx] < best_value:
+                best_value = fitness[min_idx]
+                best_solution = pop[min_idx]
 
+            t += 1
+
+            # optional stop
             if np.mean(np.std(pop, axis=0)) < self.epsilon:
                 break
 
