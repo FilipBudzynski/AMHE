@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from evaluator import DESEvaluator
 from logger import SimpleLogger
 
 
@@ -17,6 +18,7 @@ class DES:
         cd=None,
         ce=None,
         epsilon=None,
+        evaluator=None,
         logger=SimpleLogger,
     ):
         self.obj_func = objective_func
@@ -24,44 +26,36 @@ class DES:
         self.bounds = np.array(bounds)
         self.max_evals = max_evals
 
-        self.lambda_ = population_size or 4 + math.floor(3 * np.log(dim))
-        self.mu = mu or self.lambda_ // 2
-        self.cc = cc or (1.0 / np.sqrt(dim))
+        self._lambda = population_size or 4 + math.floor(3 * np.log(dim))
+        self.mu = mu or self._lambda // 2
+        self.cc = cc or (1 / np.sqrt(dim))
         self.cd = cd or (self.mu / (self.mu + 2))
-        self.ce = ce or (2.0 / dim**2)
+        self.ce = ce or (2 / dim**2)
 
         self.H = archive_horizon or int(6 + 3 * np.sqrt(dim))
         self.epsilon = epsilon or 1e-6
 
         self.archive = []
         self.p_archive = []
-        self.qmax = float("-inf")
         self.logger = logger()
+
+        if evaluator:
+            self.evaluator = evaluator
+        else:
+            self.evaluator = DESEvaluator(self.bounds, self.dim, self.obj_func)
 
     def initialize_population(self):
         return np.random.uniform(
-            self.bounds[:, 0], self.bounds[:, 1], size=(self.lambda_, self.dim)
+            self.bounds[:, 0], self.bounds[:, 1], size=(self._lambda, self.dim)
         )
 
     def evaluate(self, pop):
-        fitness = []
-        for x in pop:
-            penalty = 0.0
-            for i in range(self.dim):
-                if x[i] < self.bounds[i, 0]:  
-                    penalty += (self.bounds[i, 0] - x[i]) ** 2
-                elif x[i] > self.bounds[i, 1]:  
-                    penalty += (x[i] - self.bounds[i, 1]) ** 2
-
-            f_val = self.obj_func(x)
-
-            if penalty > 0:
-                f_val = max(f_val, self.qmax) + penalty  # infeasible
-            else:
-                self.qmax = max(self.qmax, f_val)  # feasible
-
-            fitness.append(f_val)
-        return np.array(fitness)
+        fitnesses = self.evaluator.evaluate(pop)
+        if self.logger:
+            for fit in fitnesses:
+                self.logger.log_evaluation(fit)
+        return fitnesses
+        # return self.evaluator.evaluate(pop)
 
     def select_mu_best(self, pop, fitness):
         indices = np.argsort(fitness)
@@ -75,7 +69,7 @@ class DES:
         pop = self.initialize_population()
         m_t = pop.mean(axis=0)
         fitness = self.evaluate(pop)
-        eval_count += self.lambda_
+        eval_count += self._lambda
 
         self.archive.append((pop.copy(), fitness.copy()))
 
@@ -107,11 +101,11 @@ class DES:
 
             # Step 13–21: generate new population
             new_pop = []
-            for _ in range(self.lambda_):
+            for _ in range(self._lambda):
                 # Step 14: random tau1, tau2, tau3 in {1, ..., H}
-                tau1 = np.random.randint(1, min(len(self.archive), self.H) + 1)
-                tau2 = np.random.randint(1, min(len(self.archive), self.H) + 1)
-                tau3 = np.random.randint(1, min(len(self.archive), self.H) + 1)
+                tau1 = np.random.randint(0, min(len(self.archive), self.H))
+                tau2 = np.random.randint(0, min(len(self.archive), self.H))
+                tau3 = np.random.randint(0, min(len(self.archive), self.H))
 
                 # Step 15: random j, k from {1, ..., mu}
                 j, k = np.random.choice(self.mu, 2, replace=False)
@@ -141,7 +135,7 @@ class DES:
                 if len(self.p_archive) >= tau3:
                     p_past = self.p_archive[-tau3]
                 else:
-                    p_past = np.zeros(self.dim)
+                    p_past = p_t
                 p_term = np.sqrt(1 - self.cd) * p_past * np.random.randn(self.dim)
 
                 # ε term
@@ -159,10 +153,10 @@ class DES:
 
             pop = np.array(new_pop)
             fitness = self.evaluate(pop)
-            eval_count += self.lambda_
+            eval_count += self._lambda
 
             m_t = m_tp1
-            self.archive.append((pop.copy(), fitness.copy()))
+            self.archive.append((pop.copy(), np.array(fitness).copy()))
             if len(self.archive) > self.H:
                 self.archive.pop(0)
 
@@ -172,12 +166,8 @@ class DES:
                 best_value = fitness[min_idx]
                 best_solution = pop[min_idx]
 
-            if self.logger:
-                self.logger.log(best_value, eval_count)
-
             t += 1
 
-            # optional stop
             if np.mean(np.std(pop, axis=0)) < self.epsilon:
                 break
 
