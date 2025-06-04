@@ -24,7 +24,9 @@ class SimpleLogger(Logger):
 
     def log_eval(self, value):
         self.fitness_history.append(value)
-        self.evals_history.append(self.evals_history[-1] + 1 if self.evals_history else 1)
+        self.evals_history.append(
+            self.evals_history[-1] + 1 if self.evals_history else 1
+        )
 
     def log(self, best_value, eval_count):
         self.fitness_history.append(best_value)
