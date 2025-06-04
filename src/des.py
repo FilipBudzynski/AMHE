@@ -45,7 +45,9 @@ class DES:
         self.x_real = []
         self.y_real = []
 
-        self.evaluator = evaluator or DESEvaluator(self.bounds, self.dim, self.obj_func)
+        self.evaluator = evaluator or DESEvaluator(
+            self.bounds, self.dim, objective_func
+        )
         self.surrogate_model = surrogate_model or None
 
     def initialize_population(self):
@@ -55,20 +57,21 @@ class DES:
 
     def evaluate(self, pop):
         fitnesses = [None] * len(pop)
+        num_real_evals = 0
 
         indices_to_evaluate = []
         if self.surrogate_model:
             indices_to_evaluate, predictions = self.surrogate_model.predict(pop)
 
-        if indices_to_evaluate:
+        if len(indices_to_evaluate) > 0:
 
             true_fitnesses = self.evaluator.evaluate(
                 [pop[i] for i in indices_to_evaluate]
             )
+            num_real_evals += len(indices_to_evaluate)
 
             for idx, fit in zip(indices_to_evaluate, true_fitnesses):
                 fitnesses[idx] = fit
-
                 self.surrogate_model.append(pop[idx], fit)
 
             for i in range(len(pop)):
@@ -76,13 +79,19 @@ class DES:
                     fitnesses[i] = predictions[i]
                 if self.logger:
                     self.logger.log_evaluation(fitnesses[i])
+
         else:
             fitnesses = self.evaluator.evaluate(pop)
+            num_real_evals += len(pop)
+
+            if self.surrogate_model:
+                self.surrogate_model.append(pop, fitnesses)
+
             if self.logger:
                 for fit in fitnesses:
                     self.logger.log_evaluation(fit)
 
-        return fitnesses
+        return fitnesses, num_real_evals
 
     def select_mu_best(self, pop, fitness):
         indices = np.argsort(fitness)
@@ -95,7 +104,7 @@ class DES:
         # Step 1–3
         pop = self.initialize_population()
         m_t = pop.mean(axis=0)
-        fitness = self.evaluate(pop)
+        fitness, evals = self.evaluate(pop)
         eval_count += self._lambda
 
         self.archive.append((pop.copy(), fitness.copy()))
@@ -107,7 +116,7 @@ class DES:
         best_value = float("inf")
 
         while eval_count < self.max_evals:
-            if t % 5 == 0 and self.surrogate_model:
+            if t % 10 == 0 and self.surrogate_model:
                 self.surrogate_model.train()
 
             # Step 6: mean of best mu individuals
@@ -182,7 +191,8 @@ class DES:
                 new_pop.append(x_new)
 
             pop = np.array(new_pop)
-            fitness = self.evaluate(pop)
+            fitness, evals = self.evaluate(pop)
+            # eval_count += evals
             eval_count += self._lambda
 
             m_t = m_tp1
