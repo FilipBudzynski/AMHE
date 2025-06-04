@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from des import DES
+from surrogate import GussianProcessSurrogate
+from time import time
 
 
 def q1(x):
@@ -28,20 +30,23 @@ def q6(x):
 
 if __name__ == "__main__":
     dim = 3
-    max_evals = 40000
+    max_evals = 2000
     bounds = [(-5, 5)] * dim
 
     functions = [q1, q2, q3]
     names = ["Sphere (q1)", "Cigar (q2)", "Discus (q3)"]
 
     all_histories = {}
+    surrogate = GussianProcessSurrogate()
 
     for func, name in zip(functions, names):
         print(f"Running DES2 on {name}...")
-        des = DES(func, dim, bounds, max_evals)
+        des = DES(func, dim, bounds, max_evals, surrogate_model=surrogate)
+        start_time = time()
         best_sol, best_val = des.run()
+        end_time = time()
         evals, fitness_hist = des.logger.dump()
-        print(f"Best value found: {best_val:.6f}")
+        print(f"Best value found: {best_val:.6f} in {end_time - start_time}")
         all_histories[name] = (evals, fitness_hist)
 
     plt.figure(figsize=(12, 8))
@@ -50,7 +55,9 @@ if __name__ == "__main__":
 
     plt.xlabel("Function Evaluations")
     plt.ylabel("Best Fitness Value Found")
-    plt.title("DES2 Optimization Performance on Benchmark Functions (n=3, 20000 evals)")
+    plt.title(
+        f"DES2 Optimization Performance on Benchmark Functions (n={dim}, {max_evals} evals)"
+    )
     plt.yscale("log")
     plt.ylim(1e-10, 1e6)
     plt.legend()

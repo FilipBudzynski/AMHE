@@ -2,6 +2,8 @@ import numpy as np
 import math
 from evaluator import DESEvaluator
 from logger import SimpleLogger
+from surrogate import Surrogate
+from typing import Optional
 
 
 class DES:
@@ -19,6 +21,7 @@ class DES:
         ce=None,
         epsilon=None,
         evaluator=None,
+        surrogate_model: Optional[Surrogate] = None,
         logger=SimpleLogger,
     ):
         self.obj_func = objective_func
@@ -39,10 +42,11 @@ class DES:
         self.p_archive = []
         self.logger = logger()
 
-        if evaluator:
-            self.evaluator = evaluator
-        else:
-            self.evaluator = DESEvaluator(self.bounds, self.dim, self.obj_func)
+        self.x_real = []
+        self.y_real = []
+
+        self.evaluator = evaluator or DESEvaluator(self.bounds, self.dim, self.obj_func)
+        self.surrogate_model = surrogate_model or None
 
     def initialize_population(self):
         return np.random.uniform(
@@ -50,12 +54,35 @@ class DES:
         )
 
     def evaluate(self, pop):
-        fitnesses = self.evaluator.evaluate(pop)
-        if self.logger:
-            for fit in fitnesses:
-                self.logger.log_evaluation(fit)
+        fitnesses = [None] * len(pop)
+
+        indices_to_evaluate = []
+        if self.surrogate_model:
+            indices_to_evaluate, predictions = self.surrogate_model.predict(pop)
+
+        if indices_to_evaluate:
+
+            true_fitnesses = self.evaluator.evaluate(
+                [pop[i] for i in indices_to_evaluate]
+            )
+
+            for idx, fit in zip(indices_to_evaluate, true_fitnesses):
+                fitnesses[idx] = fit
+
+                self.surrogate_model.append(pop[idx], fit)
+
+            for i in range(len(pop)):
+                if fitnesses[i] is None:
+                    fitnesses[i] = predictions[i]
+                if self.logger:
+                    self.logger.log_evaluation(fitnesses[i])
+        else:
+            fitnesses = self.evaluator.evaluate(pop)
+            if self.logger:
+                for fit in fitnesses:
+                    self.logger.log_evaluation(fit)
+
         return fitnesses
-        # return self.evaluator.evaluate(pop)
 
     def select_mu_best(self, pop, fitness):
         indices = np.argsort(fitness)
@@ -80,6 +107,9 @@ class DES:
         best_value = float("inf")
 
         while eval_count < self.max_evals:
+            if t % 5 == 0 and self.surrogate_model:
+                self.surrogate_model.train()
+
             # Step 6: mean of best mu individuals
             mu_best = self.select_mu_best(pop, fitness)
             m_tp1 = mu_best.mean(axis=0)
