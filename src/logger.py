@@ -11,7 +11,6 @@ class SimpleLogger(Logger):
         self.evals_history = []
         self.best_so_far = float("inf")
         self.eval_count = 0
-        self.real_evaluations = 0
 
     def log_evaluation(self, fitness_value):
         self.eval_count += 1
@@ -22,6 +21,3 @@ class SimpleLogger(Logger):
 
     def dump(self):
         return self.evals_history, self.fitness_history
-
-    def log_real_evaluations_count(self, times=1):
-        self.real_evaluations += times
