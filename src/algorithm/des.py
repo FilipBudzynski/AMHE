@@ -52,7 +52,7 @@ class DES:
 
     def initialize_population(self):
         return np.random.uniform(
-            self.bounds[:, 0], self.bounds[:, 1], size=(self._lambda, self.dim)
+            self.bounds[0, :], self.bounds[1, :], size=(self._lambda, self.dim)
         )
 
     def evaluate(self, pop):
