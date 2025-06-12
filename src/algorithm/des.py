@@ -24,8 +24,11 @@ class DES:
         surrogate_model: Optional[Surrogate] = None,
         logger=SimpleLogger,
     ):
+
         self.obj_func = objective_func
         self.dim = dim
+        # self.lower = np.array(objective_func.lower_bounds, dtype=float)
+        # self.upper = np.array(objective_func.upper_bounds, dtype=float)
         self.bounds = np.array(bounds)
         self.max_evals = max_evals
 
@@ -70,15 +73,13 @@ class DES:
 
             for idx, fit in zip(indices_to_evaluate, true_fitnesses):
                 fitnesses[idx] = fit
+                self.logger.log_evaluation(fit)
                 self.surrogate_model.append(pop[idx], fit)
 
             for i in range(len(pop)):
                 if fitnesses[i] is None:
                     fitnesses[i] = predictions[i]
 
-            if self.logger:
-                for fit in fitnesses:
-                    self.logger.log_evaluation(fit)
 
         else:
             fitnesses = self.evaluator.evaluate(pop)

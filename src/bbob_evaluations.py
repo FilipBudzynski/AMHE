@@ -7,18 +7,19 @@ import csv
 from algorithm.des import DES
 from surrogate import GaussianProcessSurrogate
 import warnings
+from functions.count_calls import count_calls
 
 warnings.filterwarnings("ignore")
 
-DIMENSIONS = [2, 5, 10, 20, 40]
+DIMENSIONS = [10]
 FUN_IDS = range(1, 25)
 INSTANCES = [1]
 TARGET = 1e-6
-RUNS = 3
-MAX_EVALS = 100000
+RUNS = 1
+MAX_EVALS = 20000
 SEED = 123
 
-RESULTS_DIR = "bbob_results"
+RESULTS_DIR = "bbob_results_test"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
@@ -27,11 +28,11 @@ def run_and_track(algo, f, dim, budget):
     xbest, fbest = algo.run()
     evals, fitness_hist = algo.logger.dump()
     t1 = time.time()
-    evals = f.evaluations
+    #evals = f.evaluations
     return {
-        "evals": evals,
+        "evals": f.call_count,
         "time": t1 - t0,
-        "best_so_far": fitness_hist,  
+        "best_so_far": fitness_hist,
         "best_val": fbest,
     }
 
@@ -42,8 +43,8 @@ def run_experiment():
             for instance in INSTANCES:
                 suite = cocoex.Suite(
                     "bbob",
-                    f"dimensions:{dim}",
-                    f"function_indices:{fun_id},instances:{instance}",
+                    "",
+                    f"dimensions:{dim} function_indices:{fun_id} instances:{instance}",
                 )
 
                 for f in suite:
@@ -54,33 +55,38 @@ def run_experiment():
                         rows = []
                         for run in range(RUNS):
                             print(f"  Run {run+1}/{RUNS}")
-                            suite = cocoex.Suite(
-                                "bbob",
-                                "",
-                                f"function_indices:{fun_id},instances:{instance}",
-                            )
-                            f = suite.next_problem()
 
                             np.random.seed(SEED + run)
                             random.seed(SEED + run)
 
+                            suite = cocoex.Suite(
+                                "bbob",
+                                "",
+                                f"dimensions:{dim} function_indices:{fun_id} instances:{instance}",
+                            )
+                            f = suite.next_problem()
+
+                            lower = np.full(dim, f.lower_bounds[0])
+                            upper = np.full(dim, f.upper_bounds[0])
+                            bounds = np.stack((lower, upper), axis=1)
+                            wrapped_func = count_calls(f)
+                            wrapped_func.call_count = 0
+
                             if variant == "classic":
-                                bounds = list(zip(f.lower_bounds, f.upper_bounds))
-                                des = DES(f, dim, bounds, MAX_EVALS)
+                                des = DES(wrapped_func, dim, bounds, MAX_EVALS)
                             else:
                                 surrogate = GaussianProcessSurrogate(
-                                    std_treshold=0.05, min_data_to_train=50
+                                    std_treshold=0.001, min_data_to_train=200, train_window_size=500
                                 )
-                                bounds = list(zip(f.lower_bounds, f.upper_bounds))
                                 des = DES(
-                                    f,
+                                    wrapped_func,
                                     dim,
                                     bounds,
                                     MAX_EVALS,
                                     surrogate_model=surrogate,
                                 )
 
-                            result = run_and_track(des, f, dim, MAX_EVALS)
+                            result = run_and_track(des, wrapped_func, dim, MAX_EVALS)
                             rows.append(result)
 
                         save_results(func_name, variant, rows)

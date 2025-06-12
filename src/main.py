@@ -9,12 +9,16 @@ from functions.functions import sphere, cigar, discus, ackley
 from functions.count_calls import count_calls
 
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 if __name__ == "__main__":
     SEED = 42
     np.random.seed(SEED)
     random.seed(SEED)
 
-    dim = 30
+    dim = 10 
     max_evals = 40000
     bounds = [(-5, 5)] * dim
 
@@ -36,9 +40,9 @@ if __name__ == "__main__":
             dim,
             bounds,
             max_evals,
-            surrogate_model=GaussianProcessSurrogate(
-                std_treshold=0.5, min_data_to_train=50
-            ),
+            # surrogate_model=GaussianProcessSurrogate(
+            #     std_treshold=0.5, min_data_to_train=200, train_window_size=500
+            # ),
         )
         start_time = time()
         best_sol, best_val = des.run()
@@ -61,5 +65,5 @@ if __name__ == "__main__":
     plt.ylim(1e-10, 1e6)
     plt.legend()
     plt.grid(True)
-    plt.savefig("surrogate-des-30dim", dpi=300, bbox_inches='tight')
+    plt.savefig("surrogate-des-30dim", dpi=300, bbox_inches="tight")
     plt.show()

@@ -11,7 +11,6 @@ from sklearn.linear_model import LinearRegression
 
 
 class Surrogate(ABC):
-
     @abstractmethod
     def train(self, t):
         pass
@@ -45,21 +44,23 @@ class GaussianProcessSurrogate(Surrogate):
         train_window_size=None,
         how_often_to_train=10,
     ) -> None:
+        self.is_trained = False
         self.x_real = []
         self.y_real = []
         self.model = GaussianProcessRegressor(
             # kernel=C(1.0) * RBF(length_scale=1.0),
-            kernel=C(1.0, (1e-30, 1e30))
-            * RBF(length_scale=1.0, length_scale_bounds=(1e-30, 1e6)),
+            kernel=C(1.0, (1e-5, 1e5))
+            * RBF(length_scale=1.0, length_scale_bounds=(1e-5, 1e5)),
             alpha=1e-6,
             normalize_y=True,
             optimizer=new_optimizer,
         )
-        self.DEFAULT_MIN_DATA = 500
+        self.DEFAULT_MIN_DATA = 200
         self.min_data = min_data_to_train or self.DEFAULT_MIN_DATA
         self.std_treshold = std_treshold or 1e-6
         self.train_window = train_window_size or self.DEFAULT_MIN_DATA
         self.how_often_to_train = how_often_to_train
+        self.is_trained
 
     def _remove_duplicates(self, X_train, y_train):
         X_array = np.array(X_train)
@@ -95,29 +96,27 @@ class GaussianProcessSurrogate(Surrogate):
         # y = np.array(self.y_real)
 
         scaler = preprocessing.StandardScaler().fit(X_train)
+        self.scaler = scaler
         X_scaled = scaler.transform(X_train)
 
         self.model.fit(X_scaled, y)
-        self.x_real = []
-        self.y_real = []
+        self.is_trained = True
+        # self.x_real = []
+        # self.y_real = []
 
     def predict(self, pop):
-        if len(self.x_real) >= self.min_data:
+        if self.is_trained:
             X = np.array(pop)
-            y_pred, std = self.model.predict(X, return_std=True)
+            X = np.array(pop)
+            X_scaled = self.scaler.transform(X)
+            y_pred, std = self.model.predict(X_scaled, return_std=True)
 
             predictions = np.array(y_pred).flatten().astype(float).tolist()
 
             # Threshold-based selection: only evaluate uncertain points
             high_uncertainty_indices = [
-                i for i, s in enumerate(std) if s > self.std_treshold
+                i for i, s in enumerate(std) if s < self.std_treshold
             ]
-
-            # top_k = int(0.2 * len(pop))
-            # best_pred_indices = np.argsort(predictions)[:top_k]
-            # indices_to_evaluate = list(
-            #     set(set(best_pred_indices).union(high_uncertainty_indices))
-            # )
 
             return high_uncertainty_indices, predictions
         else:
