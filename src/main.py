@@ -4,7 +4,6 @@ from algorithm.des import DES
 from surrogate import GaussianProcessSurrogate
 from functions.functions import elipsoid, sphere, cigar, discus, ackley, rosenbrock
 from functions.count_calls import count_calls
-from time import time
 import random
 import warnings
 
@@ -14,7 +13,7 @@ if __name__ == "__main__":
     SEED = 42
     dim = 10
     max_evals = 10000
-    bounds = [(-5, 5)] * dim
+    bounds = np.array([[-5] * dim, [5] * dim])
     num_runs = 50
 
     benchmarks = {
@@ -40,7 +39,7 @@ if __name__ == "__main__":
 
             wrapped_func = count_calls(func)
 
-            # --- DES only ---
+            # DES
             wrapped_func.call_count = 0
             des_plain = DES(
                 wrapped_func,
@@ -58,7 +57,7 @@ if __name__ == "__main__":
             )
             all_plain_histories.append(interp_plain)
 
-            # --- DES + Surrogate ---
+            # DES + Surrogate
             wrapped_func.call_count = 0
             des_surr = DES(
                 wrapped_func,
@@ -85,7 +84,6 @@ if __name__ == "__main__":
         avg_plain = np.mean(all_plain_histories, axis=0)
         avg_surr = np.mean(all_surr_histories, axis=0)
 
-        # --- Plot ---
         ax = axes[idx]
         ax.plot(avg_plain, label="DES only", linewidth=2)
         ax.plot(avg_surr, label="DES + Surrogate", linewidth=2)
@@ -97,13 +95,12 @@ if __name__ == "__main__":
         ax.grid(True)
         ax.legend()
 
-    # Hide the unused 6th subplot if needed
     if len(benchmarks) < len(axes):
         for i in range(len(benchmarks), len(axes)):
             fig.delaxes(axes[i])
 
     fig.suptitle(
-        f"DES vs DES + Surrogate (Average of 50 runs, dim=10)", fontsize=16
+        f"DES vs DES + Surrogate (Average of {num_runs} runs, dim={dim})", fontsize=16
     )
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.savefig("des_vs_surrogate_all_functions.png", dpi=300)
