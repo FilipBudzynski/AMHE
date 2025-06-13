@@ -20,10 +20,10 @@ class DESEvaluator(Evaluator):
         for x in population:
             penalty = 0.0
             for i in range(self.dim):
-                if x[i] < self.bounds[i, 0]:
-                    penalty += (self.bounds[i, 0] - x[i]) ** 2
-                elif x[i] > self.bounds[i, 1]:
-                    penalty += (x[i] - self.bounds[i, 1]) ** 2
+                if x[i] < self.bounds[0, i]:
+                    penalty += (self.bounds[0, i] - x[i]) ** 2
+                elif x[i] > self.bounds[1, i]:
+                    penalty += (x[i] - self.bounds[1, i]) ** 2
 
             f_val = self.obj_func(x)
 

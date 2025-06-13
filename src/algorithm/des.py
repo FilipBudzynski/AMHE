@@ -27,8 +27,6 @@ class DES:
 
         self.obj_func = objective_func
         self.dim = dim
-        # self.lower = np.array(objective_func.lower_bounds, dtype=float)
-        # self.upper = np.array(objective_func.upper_bounds, dtype=float)
         self.bounds = np.array(bounds)
         self.max_evals = max_evals
 
@@ -51,8 +49,8 @@ class DES:
         self.surrogate_model = surrogate_model or None
 
     def initialize_population(self):
-        lower = self.bounds[:, 0]
-        upper = self.bounds[:, 1]
+        lower = self.bounds[0, :]
+        upper = self.bounds[1, :]
         range_third = (upper - lower) / 3.0
 
         inscribed_lower = lower + range_third

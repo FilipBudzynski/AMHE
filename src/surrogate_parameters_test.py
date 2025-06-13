@@ -22,7 +22,6 @@ def run_experiment(param_name, param_values, dim=3, max_evals=20000, num_runs=10
 
     all_results = {}
 
-    # --- Reference: DES without surrogate ---
     print("\nRunning reference DES (no surrogate)...")
     des_only_histories = []
     for run in range(num_runs):
@@ -52,7 +51,6 @@ def run_experiment(param_name, param_values, dim=3, max_evals=20000, num_runs=10
     avg_plain = np.mean(des_only_histories, axis=0)
     all_results["DES only"] = avg_plain
 
-    # --- DES + Surrogate with varied parameter ---
     for value in param_values:
         print(f"\nTesting {param_name} = {value}")
         histories = []
@@ -87,7 +85,6 @@ def run_experiment(param_name, param_values, dim=3, max_evals=20000, num_runs=10
         avg_fitness = np.mean(histories, axis=0)
         all_results[f"{param_name}={value}"] = avg_fitness
 
-    # --- Plotting ---
     plt.figure(figsize=(10, 6))
     for label, curve in all_results.items():
         lw = 2 if "DES only" in label else 1.8
@@ -104,7 +101,6 @@ def run_experiment(param_name, param_values, dim=3, max_evals=20000, num_runs=10
     plt.savefig(f"sphere_paramtest_{param_name}.png", dpi=300)
     plt.show()
 
-# Example usage
 if __name__ == "__main__":
     run_experiment("std_treshold", [0.001, 0.005, 0.01, 0.1])
     dim=3
