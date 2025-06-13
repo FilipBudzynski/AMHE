@@ -11,6 +11,13 @@ def cigar(x):
 def discus(x):
     return 1e6 * x[0] ** 2 + np.sum(x[1:] ** 2)
 
+def elipsoid(x):
+    n = len(x)
+    exponents = 6 * (np.arange(n) / (n - 1))
+    return np.sum(10 ** (exponents * x**2))
+
+def rosenbrock(x):
+    return np.sum(100 * (x[1:] - x[:-1]**2)**2 + (x[:-1] - 1)**2)
 
 def ackley(x):
     a = 20

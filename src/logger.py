@@ -1,8 +1,15 @@
 from abc import ABC, abstractmethod
-
+from typing import List, Tuple
 
 class Logger(ABC):
-    pass
+
+    @abstractmethod
+    def log_evaluation(self, fitness_value):
+        pass
+
+    @abstractmethod
+    def dump(self) -> Tuple[List[int], List[float]]:
+        pass
 
 
 class SimpleLogger(Logger):

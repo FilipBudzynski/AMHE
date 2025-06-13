@@ -49,8 +49,8 @@ class GaussianProcessSurrogate(Surrogate):
         self.y_real = []
         self.model = GaussianProcessRegressor(
             # kernel=C(1.0) * RBF(length_scale=1.0),
-            kernel=C(1.0, (1e-5, 1e5))
-            * RBF(length_scale=1.0, length_scale_bounds=(1e-5, 1e5)),
+            kernel=C(1.0, (1e-30, 1e30))
+            * RBF(length_scale=1.0, length_scale_bounds=(1e-30, 1e30)),
             alpha=1e-6,
             normalize_y=True,
             optimizer=new_optimizer,
@@ -92,8 +92,6 @@ class GaussianProcessSurrogate(Surrogate):
             return
 
         X_train, y = self._remove_duplicates(self.x_real, self.y_real)
-        # X_train = np.array(self.x_real)
-        # y = np.array(self.y_real)
 
         scaler = preprocessing.StandardScaler().fit(X_train)
         self.scaler = scaler
@@ -107,7 +105,6 @@ class GaussianProcessSurrogate(Surrogate):
     def predict(self, pop):
         if self.is_trained:
             X = np.array(pop)
-            X = np.array(pop)
             X_scaled = self.scaler.transform(X)
             y_pred, std = self.model.predict(X_scaled, return_std=True)
 
@@ -115,7 +112,7 @@ class GaussianProcessSurrogate(Surrogate):
 
             # Threshold-based selection: only evaluate uncertain points
             high_uncertainty_indices = [
-                i for i, s in enumerate(std) if s < self.std_treshold
+                i for i, s in enumerate(std) if s > self.std_treshold
             ]
 
             return high_uncertainty_indices, predictions

@@ -51,8 +51,15 @@ class DES:
         self.surrogate_model = surrogate_model or None
 
     def initialize_population(self):
-        return np.random.uniform(
-            self.bounds[:, 0], self.bounds[:, 1], size=(self._lambda, self.dim)
+        lower = self.bounds[:, 0]
+        upper = self.bounds[:, 1]
+        range_third = (upper - lower) / 3.0
+
+        inscribed_lower = lower + range_third
+        inscribed_upper = upper - range_third
+
+        return inscribed_lower + np.random.rand(self._lambda, self.dim) * (
+            inscribed_upper - inscribed_lower
         )
 
     def evaluate(self, pop):

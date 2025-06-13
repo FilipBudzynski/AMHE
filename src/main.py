@@ -1,69 +1,110 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy._core.fromnumeric import std
 from algorithm.des import DES
 from surrogate import GaussianProcessSurrogate
+from functions.functions import elipsoid, sphere, cigar, discus, ackley, rosenbrock
+from functions.count_calls import count_calls
 from time import time
 import random
-from functions.functions import sphere, cigar, discus, ackley
-from functions.count_calls import count_calls
-
-
 import warnings
 
 warnings.filterwarnings("ignore")
 
 if __name__ == "__main__":
     SEED = 42
-    np.random.seed(SEED)
-    random.seed(SEED)
-
-    dim = 10 
-    max_evals = 40000
+    dim = 10
+    max_evals = 10000
     bounds = [(-5, 5)] * dim
+    num_runs = 50
 
     benchmarks = {
         "Sphere": sphere,
-        "Cigar": cigar,
         "Discus": discus,
+        "Cigar": cigar,
         "Ackley": ackley,
+        "Rosenbrock": rosenbrock,
     }
 
-    all_histories = {}
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.flatten()
 
-    for name, func in benchmarks.items():
-        wrapped_func = count_calls(func)
-        print(f"Running DES on {name}...")
-        wrapped_func.call_count = 0
-        des = DES(
-            wrapped_func,
-            dim,
-            bounds,
-            max_evals,
-            # surrogate_model=GaussianProcessSurrogate(
-            #     std_treshold=0.5, min_data_to_train=200, train_window_size=500
-            # ),
-        )
-        start_time = time()
-        best_sol, best_val = des.run()
-        end_time = time()
-        evals, fitness_hist = des.logger.dump()
-        print(f"Best value found: {best_val:.6f} in {end_time - start_time}")
-        print(f"Real evaluations: {wrapped_func.call_count}")
-        all_histories[name] = (evals, fitness_hist)
+    for idx, (name, func) in enumerate(benchmarks.items()):
+        print(f"\nRunning 50x evaluations on {name}...")
 
-    plt.figure(figsize=(12, 8))
-    for name, (evals, fitness) in all_histories.items():
-        plt.plot(evals, fitness, label=name)
+        all_plain_histories = []
+        all_surr_histories = []
 
-    plt.xlabel("Function Evaluations")
-    plt.ylabel("Best Fitness Value Found")
-    plt.title(
-        f"DES2 Optimization Performance on Benchmark Functions (n={dim}, {max_evals} evals)"
+        for run in range(num_runs):
+            np.random.seed(SEED + run)
+            random.seed(SEED + run)
+
+            wrapped_func = count_calls(func)
+
+            # --- DES only ---
+            wrapped_func.call_count = 0
+            des_plain = DES(
+                wrapped_func,
+                dim,
+                bounds,
+                max_evals,
+                surrogate_model=None,
+            )
+            des_plain.run()
+            evals_plain, fitness_hist_plain = des_plain.logger.dump()
+            interp_plain = np.interp(
+                np.arange(max_evals),
+                np.array(evals_plain),
+                np.array(fitness_hist_plain),
+            )
+            all_plain_histories.append(interp_plain)
+
+            # --- DES + Surrogate ---
+            wrapped_func.call_count = 0
+            des_surr = DES(
+                wrapped_func,
+                dim,
+                bounds,
+                max_evals,
+                surrogate_model=GaussianProcessSurrogate(
+                    std_treshold=0.005,
+                    min_data_to_train=dim * 8,
+                    train_window_size=dim * 50,
+                ),
+            )
+            des_surr.run()
+            evals_surr, fitness_hist_surr = des_surr.logger.dump()
+            interp_surr = np.interp(
+                np.arange(max_evals),
+                np.array(evals_surr),
+                np.array(fitness_hist_surr),
+            )
+            all_surr_histories.append(interp_surr)
+
+            print(f"Run {run+1}/{num_runs} complete")
+
+        avg_plain = np.mean(all_plain_histories, axis=0)
+        avg_surr = np.mean(all_surr_histories, axis=0)
+
+        # --- Plot ---
+        ax = axes[idx]
+        ax.plot(avg_plain, label="DES only", linewidth=2)
+        ax.plot(avg_surr, label="DES + Surrogate", linewidth=2)
+        ax.set_title(name)
+        ax.set_xlabel("Function Evaluations")
+        ax.set_ylabel("Average Best Fitness")
+        ax.set_yscale("log")
+        ax.set_ylim(1e-10, 1e6)
+        ax.grid(True)
+        ax.legend()
+
+    # Hide the unused 6th subplot if needed
+    if len(benchmarks) < len(axes):
+        for i in range(len(benchmarks), len(axes)):
+            fig.delaxes(axes[i])
+
+    fig.suptitle(
+        f"DES vs DES + Surrogate (Average of 50 runs, dim=10)", fontsize=16
     )
-    plt.yscale("log")
-    plt.ylim(1e-10, 1e6)
-    plt.legend()
-    plt.grid(True)
-    plt.savefig("surrogate-des-30dim", dpi=300, bbox_inches="tight")
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig("des_vs_surrogate_all_functions.png", dpi=300)
     plt.show()

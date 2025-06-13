@@ -1,13 +1,7 @@
-import cocoex
-import numpy as np
-import random
-import time
-import os
-import csv
+import cocoex  # experimentation module
+import cocopp  # post-processing module (not strictly necessary)
 from algorithm.des import DES
 from surrogate import GaussianProcessSurrogate
-import warnings
-from functions.count_calls import count_calls
 
 warnings.filterwarnings("ignore")
 
@@ -22,6 +16,20 @@ SEED = 123
 RESULTS_DIR = "bbob_results_test"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+        dim = problem.dimension
+        # if problem.dimension != 2:
+        #     print("xd")
+        des = DES(
+            lambda x: problem(x),
+            dim,
+            bounds=[problem.lower_bounds, problem.upper_bounds],
+            max_evals=dim * 10000,
+            population_size=4*dim,
+            # surrogate_model=GaussianProcessSurrogate(
+            #     std_treshold=0.5, min_data_to_train=50
+            # ),
+        )
+        des.run()
 
 def run_and_track(algo, f, dim, budget):
     t0 = time.time()
